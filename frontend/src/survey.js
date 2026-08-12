@@ -614,10 +614,10 @@ export class SurveyEngine {
         <div class="intro-card">
           <h2>설문 구성</h2>
           <ul style="margin-top:4px">
-            <li>PART 0 (공통): 응답자 정보 및 <strong>조사 분과 선택</strong></li>
-            <li>PART A: 용도전환 설계기준 (선택 시)</li>
-            <li>PART B: 적응형 설계기준 — AHP 가중치·경계값 (선택 시)</li>
-            <li>PART C (공통): 종합 의견</li>
+            <li>PART 0: 응답자 정보</li>
+            <li>PART A: 용도전환 설계기준 — 14개 분야의 타당성·적용 방향</li>
+            <li>PART B: 적응형 설계기준 — AHP 가중치·지표 경계값·등급</li>
+            <li>PART C: 종합 의견</li>
           </ul>
           <dl class="intro-meta">
             <dt>소요 시간</dt><dd>${m.duration}</dd>
