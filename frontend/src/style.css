@@ -445,6 +445,26 @@ body {
 }
 
 /* ── Likert Table ── */
+/* 척도 범례: 넓은 화면에서는 열 머리글이 라벨을 보여주므로 숨긴다 */
+.likert-legend {
+  display: none;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  background: var(--c-surface);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  line-height: 1.5;
+}
+
+.likert-legend-item b {
+  color: var(--c-text);
+  font-weight: 700;
+  margin-right: 3px;
+}
+
 .likert-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -745,13 +765,48 @@ body {
     padding: 20px 18px;
   }
 
+  /* 좁은 화면: 표를 화면 폭에 맞춰 가로 스크롤을 없앤다.
+     (스크롤 시 항목명·척도 머리글이 시야에서 사라지는 문제 해소) */
+  .likert-legend {
+    display: flex;
+  }
+
+  .likert-table-wrap {
+    margin: 0;
+    padding: 0;
+    overflow-x: visible;
+  }
+
+  .likert-table {
+    min-width: 0;
+    width: 100%;
+    table-layout: fixed;
+  }
+
   .likert-table thead th {
-    font-size: 11px;
-    padding: 8px 4px;
+    font-size: 12px;
+    padding: 6px 0;
+  }
+
+  .likert-table thead th:first-child {
+    width: 44%;
+    min-width: 0;
+  }
+
+  .likert-table thead th .scale-text {
+    display: none;
+  }
+
+  .likert-table tbody td {
+    padding: 11px 0;
   }
 
   .likert-table tbody td:first-child {
-    font-size: 13px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    padding-right: 8px;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
   }
 
   .likert-radio {

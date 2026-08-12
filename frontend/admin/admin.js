@@ -85,7 +85,7 @@ async function loadDashboard() {
     <div class="stat-card"><div class="label">등록 인원</div><div class="value">${data.total_participants}</div></div>
     <div class="stat-card"><div class="label">응답 완료</div><div class="value">${data.total_responses}</div></div>
     <div class="stat-card"><div class="label">제출률</div><div class="value">${data.total_participants ? (data.total_responses / data.total_participants * 100).toFixed(1) : 0}%</div></div>
-    <div class="stat-card"><div class="label">자기등록</div><div class="value">${data.self_registered ?? 0}</div></div>
+    <div class="stat-card"><div class="label">테스트 제외</div><div class="value">${data.excluded_test ?? 0}</div></div>
   `;
 
   const order = ['설계', '시공', '건축행정', '유지관리', '기타', '미분류'];
@@ -117,8 +117,8 @@ async function loadParticipants(page = 0) {
     : data.data;
 
   document.getElementById('p-table').innerHTML = `<table>
-    <thead><tr><th>이름</th><th>소속</th><th>직위</th><th>등록</th><th>이메일</th><th>연락처</th><th>토큰</th></tr></thead>
-    <tbody>${filtered.map(p => `<tr>
+    <thead><tr><th>이름</th><th>소속</th><th>직위</th><th>등록</th><th>이메일</th><th>집계</th><th>토큰</th></tr></thead>
+    <tbody>${filtered.map(p => `<tr${p.is_test ? ' style="opacity:.55"' : ''}>
       <td>${p.name}</td>
       <td>${p.org || ''}</td>
       <td>${p.position || ''}</td>
@@ -126,7 +126,9 @@ async function loadParticipants(page = 0) {
         ? '<span class="badge badge-green">자기등록</span>'
         : '<span class="badge badge-gray">사전등록</span>'}</td>
       <td style="font-size:12px">${p.email}</td>
-      <td style="font-size:12px">${p.phone || ''}</td>
+      <td>${p.is_test
+        ? `<span class="badge badge-gray">테스트·제외</span> <button class="btn btn-sm btn-outline" onclick="toggleTest('${p.token}', false)">집계 포함</button>`
+        : `<button class="btn btn-sm btn-outline" onclick="toggleTest('${p.token}', true)">테스트로 제외</button>`}</td>
       <td><code style="font-size:11px;cursor:pointer" onclick="navigator.clipboard.writeText('${p.token}');toast('복사됨')">${p.token}</code></td>
     </tr>`).join('')}</tbody>
   </table>`;
@@ -135,6 +137,18 @@ async function loadParticipants(page = 0) {
   document.getElementById('p-pagination').innerHTML = Array.from({ length: Math.min(totalPages, 10) }, (_, i) =>
     `<button class="btn btn-sm ${i === page ? 'btn-primary' : 'btn-outline'}" onclick="loadParticipants(${i})">${i + 1}</button>`
   ).join('');
+}
+
+async function toggleTest(token, isTest) {
+  if (isTest && !confirm('이 응답자를 테스트 계정으로 표시할까요?\n\n표시하면 대시보드 통계·응답 목록·CSV 내보내기에서 제외됩니다. 기록 자체는 삭제되지 않으며 언제든 되돌릴 수 있습니다.')) return;
+  try {
+    await api(`/api/admin/participants/${token}/test-flag?is_test=${isTest}`, { method: 'POST' });
+    toast(isTest ? '테스트 계정으로 제외했습니다' : '집계에 다시 포함했습니다');
+    loadParticipants(pPage);
+    loadDashboard();
+  } catch (e) {
+    toast('변경 실패: ' + e.message, 'error');
+  }
 }
 
 document.getElementById('p-category').addEventListener('change', () => loadParticipants(0));

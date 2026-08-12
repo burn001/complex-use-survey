@@ -18,16 +18,44 @@ def _check_admin(key: Optional[str]):
         raise HTTPException(403, "관리자 인증 실패")
 
 
+async def _test_tokens(db) -> list[str]:
+    """결과 집계에서 제외할 테스트 계정 토큰."""
+    return [p["token"] async for p in db.participants.find({"is_test": True}, {"token": 1})]
+
+
+@router.post("/participants/{token}/test-flag")
+async def set_test_flag(
+    token: str,
+    is_test: bool = True,
+    x_admin_key: Optional[str] = Header(None),
+):
+    """참가자를 테스트 계정으로 표시/해제한다. 표시된 계정은 통계·응답목록·CSV에서 제외된다."""
+    _check_admin(x_admin_key)
+    db = get_db()
+    result = await db.participants.update_one(
+        {"token": token}, {"$set": {"is_test": is_test}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "참가자를 찾을 수 없습니다.")
+    return {"status": "updated", "token": token, "is_test": is_test}
+
+
 @router.get("/stats")
 async def get_stats(x_admin_key: Optional[str] = Header(None)):
     _check_admin(x_admin_key)
     db = get_db()
 
-    total_p = await db.participants.count_documents({})
-    total_r = await db.responses.count_documents({})
-    self_registered = await db.participants.count_documents({"source": "self"})
+    test_tokens = await _test_tokens(db)
+    p_filter = {"is_test": {"$ne": True}}
+    r_filter = {"token": {"$nin": test_tokens}} if test_tokens else {}
+
+    total_p = await db.participants.count_documents(p_filter)
+    total_r = await db.responses.count_documents(r_filter)
+    self_registered = await db.participants.count_documents({**p_filter, "source": "self"})
+    excluded_test = len(test_tokens)
 
     pipeline = [
+        {"$match": p_filter},
         {"$lookup": {
             "from": "responses",
             "localField": "token",
@@ -54,6 +82,7 @@ async def get_stats(x_admin_key: Optional[str] = Header(None)):
         "total_participants": total_p,
         "total_responses": total_r,
         "self_registered": self_registered,
+        "excluded_test": excluded_test,
         "by_category": by_category,
     }
 
@@ -76,6 +105,7 @@ async def list_responses(
             "as": "participant",
         }},
         {"$unwind": {"path": "$participant", "preserveNullAndEmptyArrays": True}},
+        {"$match": {"participant.is_test": {"$ne": True}}},
     ]
     if category:
         pipeline.append({"$match": {"participant.category": category}})
@@ -115,6 +145,7 @@ async def export_csv(x_admin_key: Optional[str] = Header(None)):
             "as": "p",
         }},
         {"$unwind": {"path": "$p", "preserveNullAndEmptyArrays": True}},
+        {"$match": {"p.is_test": {"$ne": True}}},
         {"$sort": {"submitted_at": 1}},
     ]
     cursor = db.responses.aggregate(pipeline)

@@ -775,9 +775,16 @@ export class SurveyEngine {
   }
 
   renderLikertTable(q) {
-    let html = '<div class="likert-table-wrap"><table class="likert-table" data-qid="' + q.id + '">';
+    // 좁은 화면에서는 열 머리글의 척도 라벨을 숨기고 아래 범례로 대체한다.
+    let html = '<div class="likert-legend">';
+    q.scaleLabels.forEach((l, i) => {
+      html += `<span class="likert-legend-item"><b>${i + 1}</b> ${l}</span>`;
+    });
+    html += '</div>';
+
+    html += '<div class="likert-table-wrap"><table class="likert-table" data-qid="' + q.id + '">';
     html += '<thead><tr><th></th>';
-    q.scaleLabels.forEach((l, i) => { html += `<th>${i + 1}<br><span style="font-weight:400">${l}</span></th>`; });
+    q.scaleLabels.forEach((l, i) => { html += `<th>${i + 1}<br><span class="scale-text">${l}</span></th>`; });
     html += '</tr></thead><tbody>';
     q.items.forEach((item, idx) => {
       html += `<tr data-row="${idx}">`;
