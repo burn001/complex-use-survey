@@ -73,7 +73,8 @@ export class SurveyEngine {
     this.submittedAt = data.submitted_at || null;
     this.updatedAt = data.updated_at || null;
     if (data.has_responded && data.responses) {
-      this.responses = { ...this.responses, ...data.responses };
+      // 서버에 저장된 응답도 이전 판본일 수 있으므로 동일하게 정리한다.
+      this.responses = { ...this.responses, ...this.sanitizeResponses(data.responses) };
       this.saveResponses();
       this.submitted = true;
       this.gate = GATE.RESUBMIT_CHOICE;
@@ -259,7 +260,7 @@ export class SurveyEngine {
   loadResponses() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : {};
+      return this.sanitizeResponses(saved ? JSON.parse(saved) : {});
     } catch { return {}; }
   }
 
@@ -1034,7 +1035,9 @@ export class SurveyEngine {
         const [qid, rowStr] = name.split(/_(\d+)$/);
         const row = parseInt(rowStr);
         const val = parseInt(radio.value);
-        let resp = this.getResponse(qid) || {};
+        let resp = this.getResponse(qid);
+        // 옛 판본의 값(숫자·배열 등)이 남아 있으면 새로 시작한다.
+        if (!resp || typeof resp !== 'object' || Array.isArray(resp)) resp = {};
         const q = this.findQuestion(qid);
         // 순위 매트릭스: uniqueColumns 값은 한 행에만 (중복 시 이전 행 해제)
         if (q && Array.isArray(q.uniqueColumns) && q.uniqueColumns.includes(val)) {
@@ -1258,6 +1261,62 @@ export class SurveyEngine {
       }
     }
     return result;
+  }
+
+  // 문항 유형별로 기대되는 저장값 종류
+  expectedKind(q) {
+    switch (q.type) {
+      case Q_TYPE.SINGLE:
+      case Q_TYPE.SINGLE_WITH_OTHER:
+        return 'number';
+      case Q_TYPE.MULTI:
+      case Q_TYPE.MULTI_LIMIT:
+      case Q_TYPE.MULTI_WITH_OTHER:
+      case Q_TYPE.MULTI_LIMIT_OTHER:
+        return 'array';
+      case Q_TYPE.LIKERT_TABLE:
+      case Q_TYPE.AHP_PAIRWISE:
+        return 'object';
+      case Q_TYPE.TEXT:
+        return 'string';
+      default:
+        return null;
+    }
+  }
+
+  matchesKind(val, kind) {
+    switch (kind) {
+      case 'number': return typeof val === 'number';
+      case 'array': return Array.isArray(val);
+      case 'object': return val !== null && typeof val === 'object' && !Array.isArray(val);
+      case 'string': return typeof val === 'string';
+      default: return true;
+    }
+  }
+
+  /**
+   * 저장된 응답 중 현재 문항 정의와 어긋나는 값을 제거한다.
+   * 문항 개편으로 같은 id가 다른 유형이 되면(예: 단일선택 → 리커트 표)
+   * 옛 값이 남아 응답 저장이 실패하고 다음 단계로 넘어갈 수 없게 된다.
+   */
+  sanitizeResponses(responses) {
+    if (!responses || typeof responses !== 'object') return {};
+    const cleaned = {};
+    let dropped = 0;
+    for (const [key, val] of Object.entries(responses)) {
+      const baseId = key.endsWith('_other') ? key.slice(0, -6) : key;
+      const q = this.findQuestion(baseId);
+      if (!q) { dropped++; continue; }                       // 삭제된 문항의 잔여 응답
+      if (key.endsWith('_other')) {
+        if (typeof val === 'string') cleaned[key] = val; else dropped++;
+        continue;
+      }
+      const kind = this.expectedKind(q);
+      if (kind && !this.matchesKind(val, kind)) { dropped++; continue; }  // 유형 불일치
+      cleaned[key] = val;
+    }
+    if (dropped > 0) console.info(`[survey] 이전 판본의 응답 ${dropped}건을 정리했습니다.`);
+    return cleaned;
   }
 
   findQuestion(qid) {
