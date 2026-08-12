@@ -38,6 +38,7 @@ export class SurveyEngine {
     this.participantFormError = '';
     this.registerError = '';
     this.registerBusy = false;
+    this.crAcknowledged = false;
 
     if (this.token) {
       this.verifyToken().then(() => this.render());
@@ -925,7 +926,7 @@ export class SurveyEngine {
     el.innerHTML = `
       <div class="ahp-cr-row"><strong>CR = ${cr.toFixed(3)}</strong> ${ok ? '<span class="ahp-badge ok">일관성 양호</span>' : '<span class="ahp-badge bad">일관성 부족 (재검토)</span>'}</div>
       <div class="ahp-weights">가중치: ${weightStr}</div>
-      ${ok ? '' : '<div class="ahp-cr-help">CR &lt; 0.1 이 되도록 모순되는 비교를 조정해 주십시오. (예: A&gt;B, B&gt;C 인데 C&gt;A)</div>'}
+      ${ok ? '' : '<div class="ahp-cr-help">모순되는 비교를 조정하시면 CR이 낮아집니다. (예: A&gt;B, B&gt;C 인데 C&gt;A) — <strong>이대로도 제출하실 수 있습니다.</strong></div>'}
     `;
   }
 
@@ -1178,6 +1179,7 @@ export class SurveyEngine {
   // ── Validation ──
   validateSection(section) {
     let valid = true;
+    const highCr = [];   // 일관성비율이 높은 AHP 문항 (차단하지 않고 확인만)
     const allQuestions = this.getAllQuestions(section);
 
     for (const q of allQuestions) {
@@ -1205,9 +1207,9 @@ export class SurveyEngine {
           this.showError(q.id, '모든 쌍을 비교해 주십시오.');
           this.container.querySelector(`.ahp-block[data-qid="${q.id}"]`)?.classList.add('has-error');
         } else if (n > 2 && val.cr >= 0.1) {
-          ok = false;
-          this.showError(q.id, `일관성비율(CR=${val.cr.toFixed(3)})이 0.1 이상입니다. 응답을 재검토해 주십시오.`);
-          this.container.querySelector(`.ahp-block[data-qid="${q.id}"]`)?.classList.add('has-error');
+          // 일관성 부족은 진행을 막지 않는다(분석 단계에서 CR<0.1 응답만 채택).
+          // 다만 한 번은 재검토를 권한 뒤, 응답자가 선택하면 그대로 진행한다.
+          highCr.push({ id: q.id, cr: val.cr });
         }
       } else if (q.type === Q_TYPE.TEXT) {
         ok = val && val.trim().length > 0;
@@ -1240,6 +1242,24 @@ export class SurveyEngine {
     if (!valid) {
       const firstError = this.container.querySelector('.has-error');
       firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return false;
+    }
+
+    // 필수 응답은 모두 충족. 일관성비율이 높으면 한 번만 확인하고 진행 여부를 응답자에게 맡긴다.
+    if (highCr.length && !this.crAcknowledged) {
+      const detail = highCr.map(h => `· ${h.id} — CR ${h.cr.toFixed(3)}`).join('\n');
+      const proceed = confirm(
+        '쌍대비교의 일관성비율(CR)이 권장치 0.1을 넘습니다.\n\n' + detail + '\n\n' +
+        '「취소」를 누르면 화면으로 돌아가 비교를 수정하실 수 있습니다.\n' +
+        '「확인」을 누르면 이대로 제출을 진행합니다. ' +
+        '일관성이 낮은 응답도 접수되며, 가중치 분석에서만 별도로 다루어집니다.'
+      );
+      if (!proceed) {
+        const block = this.container.querySelector(`.ahp-block[data-qid="${highCr[0].id}"]`);
+        block?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
+      }
+      this.crAcknowledged = true;
     }
 
     return valid;
