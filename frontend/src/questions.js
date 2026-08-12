@@ -8,7 +8,8 @@ export const SURVEY_META = {
   researcher: '이주경 부연구위원',
   contact: 'jklee@auri.re.kr',
   duration: '약 25~30분',
-  version: 'v1',
+  // 문항 동결: 2026.8.12. 본조사 발송본. 이후 문항 변경 시 반드시 버전을 올릴 것.
+  version: 'v2-260812',
 };
 
 // 문항 유형
@@ -60,6 +61,17 @@ export const sections = [
         text: '비주거→주거 용도전환 또는 적응형(장수명) 설계 관련 직접 경험이 있으십니까?',
         type: Q_TYPE.SINGLE,
         options: ['있음', '없음'],
+      },
+      {
+        id: 'P4',
+        text: '본 조사가 다루는 두 분야에 대한 귀하의 친숙도를 표시해 주십시오.',
+        note: '실무·연구를 통해 해당 분야의 기준과 쟁점에 얼마나 익숙하신지를 여쭙는 것입니다. 낮게 응답하셔도 응답에는 제한이 없으며, 분석 시 참고자료로만 활용됩니다.',
+        type: Q_TYPE.LIKERT_TABLE,
+        scaleLabels: ['매우 낮음', '낮음', '보통', '높음', '매우 높음'],
+        items: [
+          '용도전환 설계기준 — 기축 건축물의 용도전환 (PART A)',
+          '적응형 설계기준 — 신축 건축물의 전환 대비 설계 (PART B)',
+        ],
       },
     ],
   },

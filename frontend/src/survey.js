@@ -143,6 +143,20 @@ export class SurveyEngine {
               <input type="tel" id="r-phone" autocomplete="tel" placeholder="선택 입력 (010-0000-0000)" />
             </label>
           </div>
+          <div class="consent-box">
+            <div class="consent-title">개인정보 수집·이용 동의 <em class="req">*</em></div>
+            <dl class="consent-terms">
+              <dt>수집 항목</dt><dd>이름·소속·이메일(필수), 직위·연락처(선택)</dd>
+              <dt>이용 목적</dt><dd>응답 확인·수정, 결과 요약 회신 및 2차 조사 안내</dd>
+              <dt>보유 기간</dt><dd>연구 종료 시 파기</dd>
+              <dt>익명 처리</dt><dd>분석 결과는 통계 처리되어 익명으로만 공표되며, 개인 응답은 공개되지 않습니다</dd>
+            </dl>
+            <label class="consent-check">
+              <input type="checkbox" id="r-consent" />
+              <span>위 내용을 확인하였으며 개인정보 수집·이용에 <strong>동의합니다.</strong></span>
+            </label>
+            <p class="consent-note">동의를 거부하실 수 있으나, 이 경우 설문 참여가 제한됩니다.</p>
+          </div>
           ${errHtml}
           <p class="register-hint">
             같은 이메일로 다시 접속하시면 이전 응답을 이어서 <strong>수정</strong>하실 수 있습니다.
@@ -183,12 +197,16 @@ export class SurveyEngine {
       email: val('#r-email'),
       position: val('#r-position'),
       phone: val('#r-phone'),
+      consent: Boolean(this.container.querySelector('#r-consent')?.checked),
     };
 
     if (!payload.name) return this.failRegister('이름을 입력해 주십시오.', '#r-name');
     if (!payload.org) return this.failRegister('소속을 입력해 주십시오.', '#r-org');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
       return this.failRegister('올바른 이메일을 입력해 주십시오.', '#r-email');
+    }
+    if (!payload.consent) {
+      return this.failRegister('개인정보 수집·이용에 동의해 주셔야 참여하실 수 있습니다.', '#r-consent');
     }
 
     this.registerBusy = true;
@@ -226,11 +244,14 @@ export class SurveyEngine {
       '#r-position': this.container.querySelector('#r-position')?.value || '',
       '#r-phone': this.container.querySelector('#r-phone')?.value || '',
     };
+    const consent = Boolean(this.container.querySelector('#r-consent')?.checked);
     this.renderRegister();
     for (const [sel, v] of Object.entries(values)) {
       const el = this.container.querySelector(sel);
       if (el) el.value = v;
     }
+    const consentEl = this.container.querySelector('#r-consent');
+    if (consentEl) consentEl.checked = consent;
     this.container.querySelector(focusSel || '#r-name')?.focus();
   }
 

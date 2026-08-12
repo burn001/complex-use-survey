@@ -22,6 +22,7 @@ class SelfRegisterRequest(BaseModel):
     email: str
     position: str = ""
     phone: str = ""
+    consent: bool = False
 
 
 class ParticipantOut(BaseModel):

@@ -45,6 +45,8 @@ async def self_register(body: SelfRegisterRequest):
         raise HTTPException(400, "소속을 입력해 주십시오.")
     if not EMAIL_RE.match(email):
         raise HTTPException(400, "올바른 이메일을 입력해 주십시오.")
+    if not body.consent:
+        raise HTTPException(400, "개인정보 수집·이용에 동의해 주셔야 참여하실 수 있습니다.")
 
     db = get_db()
     token = generate_token(email, get_settings().TOKEN_SECRET)
@@ -61,11 +63,17 @@ async def self_register(body: SelfRegisterRequest):
 
     existing = await db.participants.find_one({"token": token})
     if existing:
+        # 최초 동의 시점은 덮어쓰지 않는다.
+        if not existing.get("consent_at"):
+            fields["consent"] = True
+            fields["consent_at"] = now
         await db.participants.update_one({"token": token}, {"$set": fields})
     else:
         await db.participants.insert_one({
             "token": token,
             **fields,
+            "consent": True,
+            "consent_at": now,
             "category": "",
             "field": "",
             "source": "self",
