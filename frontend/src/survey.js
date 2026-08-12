@@ -2,10 +2,12 @@ import { sections, Q_TYPE, SURVEY_META } from './questions.js';
 
 const STORAGE_KEY = 'auri_survey_responses';
 const STORAGE_PAGE_KEY = 'auri_survey_page';
+const STORAGE_TOKEN_KEY = 'auri_survey_token';
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 const GATE = {
   LOADING: 'loading',
+  REGISTER: 'register',
   DENIED: 'denied',
   RESUBMIT_CHOICE: 'resubmit_choice',
   READ_ONLY: 'read_only',
@@ -20,18 +22,22 @@ const EDIT_MODE = {
 export class SurveyEngine {
   constructor(container) {
     this.container = container;
-    this.token = new URLSearchParams(window.location.search).get('token');
+    const urlToken = new URLSearchParams(window.location.search).get('token');
+    this.fromUrlToken = Boolean(urlToken);
+    this.token = urlToken || localStorage.getItem(STORAGE_TOKEN_KEY) || null;
     this.participant = null;
     this.submitted = false;
     this.submittedAt = null;
     this.updatedAt = null;
     this.editMode = EDIT_MODE.NEW;
-    this.gate = this.token ? GATE.LOADING : GATE.DENIED;
+    this.gate = this.token ? GATE.LOADING : GATE.REGISTER;
     this.responses = this.loadResponses();
     this.currentPage = 0;
     this.visibleSections = [];
     this.editingParticipant = false;
     this.participantFormError = '';
+    this.registerError = '';
+    this.registerBusy = false;
 
     if (this.token) {
       this.verifyToken().then(() => this.render());
@@ -44,24 +50,188 @@ export class SurveyEngine {
     try {
       const res = await fetch(`${API_BASE}/api/survey/${this.token}`);
       if (!res.ok) {
-        this.gate = GATE.DENIED;
+        // 저장해 둔 토큰이 서버에 없으면(초기화 등) 자기등록으로 되돌린다.
+        if (!this.fromUrlToken) {
+          this.clearIdentity();
+          this.gate = GATE.REGISTER;
+        } else {
+          this.gate = GATE.DENIED;
+        }
         return;
       }
       const data = await res.json();
-      this.participant = data;
-      this.submittedAt = data.submitted_at || null;
-      this.updatedAt = data.updated_at || null;
-      if (data.has_responded && data.responses) {
-        this.responses = { ...this.responses, ...data.responses };
-        this.saveResponses();
-        this.submitted = true;
-        this.gate = GATE.RESUBMIT_CHOICE;
-      } else {
-        this.gate = GATE.OPEN;
-      }
+      this.applyParticipant(data);
     } catch {
       this.gate = GATE.DENIED;
     }
+  }
+
+  applyParticipant(data) {
+    this.participant = data;
+    this.token = data.token;
+    localStorage.setItem(STORAGE_TOKEN_KEY, data.token);
+    this.submittedAt = data.submitted_at || null;
+    this.updatedAt = data.updated_at || null;
+    if (data.has_responded && data.responses) {
+      this.responses = { ...this.responses, ...data.responses };
+      this.saveResponses();
+      this.submitted = true;
+      this.gate = GATE.RESUBMIT_CHOICE;
+    } else {
+      this.gate = GATE.OPEN;
+    }
+  }
+
+  clearIdentity() {
+    localStorage.removeItem(STORAGE_TOKEN_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_PAGE_KEY);
+    this.token = null;
+    this.participant = null;
+    this.responses = {};
+    this.submitted = false;
+    this.submittedAt = null;
+    this.updatedAt = null;
+    this.editMode = EDIT_MODE.NEW;
+    this.currentPage = 0;
+  }
+
+  // ── 자기등록 (공개 링크 응답자) ──
+  renderRegister() {
+    const m = SURVEY_META;
+    const errHtml = this.registerError
+      ? `<p class="participant-error">${this.escape(this.registerError)}</p>`
+      : '';
+
+    this.container.innerHTML = `
+      <div class="survey-container">
+        <div class="survey-header">
+          <div class="institution">${m.institution}</div>
+          <h1>${m.title}</h1>
+          <div class="subtitle">${m.subtitle}</div>
+        </div>
+
+        <div class="intro-card">
+          <h2>응답자 정보</h2>
+          <p>본 조사는 <strong>「건축물의 복합용도 활성화 지원 특별법」의 위임 세부기준</strong>을 전문가 합의로 확정하기 위한 제1차 조사입니다. 응답 전 아래 정보를 입력해 주십시오.</p>
+          <p style="margin-top:10px">입력하신 정보는 <strong>응답 확인·수정 및 2라운드 안내</strong>에만 사용되며, 분석 결과는 통계 처리되어 익명으로만 공표됩니다.</p>
+        </div>
+
+        <div class="participant-card editing">
+          <div class="participant-card-header">
+            <h3>정보 입력</h3>
+          </div>
+          <div class="participant-form">
+            <label>
+              <span>이름 <em class="req">*</em></span>
+              <input type="text" id="r-name" autocomplete="name" />
+            </label>
+            <label>
+              <span>소속 <em class="req">*</em></span>
+              <input type="text" id="r-org" autocomplete="organization" placeholder="예: ○○대학교 건축학과 / ○○건축사사무소" />
+            </label>
+            <label>
+              <span>이메일 <em class="req">*</em></span>
+              <input type="email" id="r-email" autocomplete="email" placeholder="name@example.com" />
+            </label>
+            <label>
+              <span>직위·직급</span>
+              <input type="text" id="r-position" autocomplete="organization-title" placeholder="선택 입력" />
+            </label>
+            <label>
+              <span>연락처</span>
+              <input type="tel" id="r-phone" autocomplete="tel" placeholder="선택 입력 (010-0000-0000)" />
+            </label>
+          </div>
+          ${errHtml}
+          <p class="register-hint">
+            같은 이메일로 다시 접속하시면 이전 응답을 이어서 <strong>수정</strong>하실 수 있습니다.
+          </p>
+          <div class="participant-actions">
+            <button class="btn btn-next" id="btn-register">설문 시작하기</button>
+          </div>
+        </div>
+
+        <div class="intro-card">
+          <h2>안내</h2>
+          <dl class="intro-meta">
+            <dt>소요 시간</dt><dd>${m.duration}</dd>
+            <dt>비밀보장</dt><dd>모든 응답은 통계 처리 후 익명 활용</dd>
+            <dt>연구책임</dt><dd>${m.researcher} (${m.contact})</dd>
+          </dl>
+        </div>
+      </div>
+    `;
+
+    const submit = () => this.submitRegistration();
+    this.container.querySelector('#btn-register').addEventListener('click', submit);
+    this.container.querySelectorAll('.participant-form input').forEach(el => {
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+      });
+    });
+    this.container.querySelector('#r-name')?.focus();
+  }
+
+  async submitRegistration() {
+    if (this.registerBusy) return;
+
+    const val = id => (this.container.querySelector(id)?.value || '').trim();
+    const payload = {
+      name: val('#r-name'),
+      org: val('#r-org'),
+      email: val('#r-email'),
+      position: val('#r-position'),
+      phone: val('#r-phone'),
+    };
+
+    if (!payload.name) return this.failRegister('이름을 입력해 주십시오.', '#r-name');
+    if (!payload.org) return this.failRegister('소속을 입력해 주십시오.', '#r-org');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+      return this.failRegister('올바른 이메일을 입력해 주십시오.', '#r-email');
+    }
+
+    this.registerBusy = true;
+    const btn = this.container.querySelector('#btn-register');
+    if (btn) { btn.disabled = true; btn.textContent = '확인 중…'; }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `등록 실패 (${res.status})`);
+      }
+      const data = await res.json();
+      this.registerBusy = false;
+      this.registerError = '';
+      this.applyParticipant(data);
+      this.render();
+    } catch (err) {
+      this.registerBusy = false;
+      if (btn) { btn.disabled = false; btn.textContent = '설문 시작하기'; }
+      this.failRegister(err.message || '등록 중 오류가 발생했습니다. 잠시 후 다시 시도해 주십시오.');
+    }
+  }
+
+  failRegister(msg, focusSel) {
+    this.registerError = msg;
+    const values = {
+      '#r-name': this.container.querySelector('#r-name')?.value || '',
+      '#r-org': this.container.querySelector('#r-org')?.value || '',
+      '#r-email': this.container.querySelector('#r-email')?.value || '',
+      '#r-position': this.container.querySelector('#r-position')?.value || '',
+      '#r-phone': this.container.querySelector('#r-phone')?.value || '',
+    };
+    this.renderRegister();
+    for (const [sel, v] of Object.entries(values)) {
+      const el = this.container.querySelector(sel);
+      if (el) el.value = v;
+    }
+    this.container.querySelector(focusSel || '#r-name')?.focus();
   }
 
   // ── Persistence ──
@@ -98,6 +268,10 @@ export class SurveyEngine {
   render() {
     if (this.gate === GATE.LOADING) {
       this.renderLoading();
+      return;
+    }
+    if (this.gate === GATE.REGISTER) {
+      this.renderRegister();
       return;
     }
     if (this.gate === GATE.DENIED) {
@@ -145,11 +319,12 @@ export class SurveyEngine {
               <line x1="5.6" y1="5.6" x2="18.4" y2="18.4"></line>
             </svg>
           </div>
-          <h1>접근 권한이 없습니다</h1>
+          <h1>링크를 확인할 수 없습니다</h1>
           <p class="access-denied-msg">
-            본 설문은 사전에 발송된 개별 링크를 통해서만 참여할 수 있습니다.<br/>
-            이메일로 수신한 링크를 다시 확인하시거나, 아래 연락처로 문의해 주십시오.
+            접속하신 링크의 참여자 정보를 찾을 수 없습니다.<br/>
+            아래 버튼을 눌러 응답자 정보를 직접 입력하고 참여하실 수 있습니다.
           </p>
+          <button class="btn btn-next" id="btn-to-register" style="margin-top:8px">응답자 정보 입력하고 참여하기</button>
           <div class="access-denied-meta">
             <dl>
               <dt>조사기관</dt><dd>${m.institution}</dd>
@@ -160,6 +335,12 @@ export class SurveyEngine {
         </div>
       </div>
     `;
+    this.container.querySelector('#btn-to-register')?.addEventListener('click', () => {
+      this.clearIdentity();
+      this.fromUrlToken = false;
+      this.gate = GATE.REGISTER;
+      this.render();
+    });
   }
 
   // ── Resubmit Choice (이미 제출한 토큰 재접근) ──
@@ -241,10 +422,22 @@ export class SurveyEngine {
     const p = this.participant;
     if (!p) return '';
 
+    const isSelf = p.source === 'self';
+
     if (this.editingParticipant) {
       const errHtml = this.participantFormError
         ? `<p class="participant-error">${this.escape(this.participantFormError)}</p>`
         : '';
+      const emailField = isSelf
+        ? `<label>
+              <span>이메일</span>
+              <input type="email" id="p-email" value="${this.escape(p.email || '')}" readonly />
+              <small class="field-hint">응답 식별자로 사용되어 변경할 수 없습니다.</small>
+            </label>`
+        : `<label>
+              <span>이메일</span>
+              <input type="email" id="p-email" value="${this.escape(p.email || '')}" />
+            </label>`;
       return `
         <div class="participant-card editing">
           <div class="participant-card-header">
@@ -255,13 +448,14 @@ export class SurveyEngine {
               <span>이름</span>
               <input type="text" id="p-name" value="${this.escape(p.name || '')}" />
             </label>
-            <label>
-              <span>이메일</span>
-              <input type="email" id="p-email" value="${this.escape(p.email || '')}" />
-            </label>
+            ${emailField}
             <label>
               <span>소속</span>
               <input type="text" id="p-org" value="${this.escape(p.org || '')}" />
+            </label>
+            <label>
+              <span>직위·직급</span>
+              <input type="text" id="p-position" value="${this.escape(p.position || '')}" />
             </label>
             <label>
               <span>연락처</span>
@@ -277,18 +471,29 @@ export class SurveyEngine {
       `;
     }
 
+    const categoryRow = p.category
+      ? `<dt>직군</dt><dd class="readonly">${this.escape(p.category)} <span class="hint">(사전 분류)</span></dd>`
+      : '';
+    const switchBtn = isSelf
+      ? `<button class="btn-link btn-link-quiet" id="btn-p-switch">다른 응답자로 시작</button>`
+      : '';
+
     return `
       <div class="participant-card">
         <div class="participant-card-header">
           <h3>내 정보</h3>
-          <button class="btn-link" id="btn-p-edit">수정</button>
+          <div class="participant-card-tools">
+            ${switchBtn}
+            <button class="btn-link" id="btn-p-edit">수정</button>
+          </div>
         </div>
         <dl class="participant-info">
           <dt>이름</dt><dd>${this.escape(p.name || '-')}</dd>
           <dt>이메일</dt><dd>${this.escape(p.email || '-')}</dd>
           <dt>소속</dt><dd>${this.escape(p.org || '-')}</dd>
+          <dt>직위</dt><dd>${this.escape(p.position || '-')}</dd>
           <dt>연락처</dt><dd>${this.escape(p.phone || '-')}</dd>
-          <dt>직군</dt><dd class="readonly">${this.escape(p.category || '-')} <span class="hint">(사전 분류)</span></dd>
+          ${categoryRow}
         </dl>
       </div>
     `;
@@ -308,27 +513,45 @@ export class SurveyEngine {
     this.container.querySelector('#btn-p-save')?.addEventListener('click', () => {
       this.saveParticipant();
     });
+    this.container.querySelector('#btn-p-switch')?.addEventListener('click', () => {
+      if (!confirm('다른 응답자로 새로 시작하시겠습니까?\n\n현재 브라우저에 저장된 응답 내용이 지워집니다. 이미 제출하신 응답은 서버에 그대로 보관되며, 같은 이메일로 다시 접속하면 이어서 수정하실 수 있습니다.')) return;
+      this.clearIdentity();
+      this.fromUrlToken = false;
+      this.registerError = '';
+      this.gate = GATE.REGISTER;
+      this.render();
+    });
   }
 
   async saveParticipant() {
     const nameEl = this.container.querySelector('#p-name');
     const emailEl = this.container.querySelector('#p-email');
     const orgEl = this.container.querySelector('#p-org');
+    const positionEl = this.container.querySelector('#p-position');
     const phoneEl = this.container.querySelector('#p-phone');
 
     const payload = {
       name: nameEl.value.trim(),
-      email: emailEl.value.trim(),
       org: orgEl.value.trim(),
+      position: positionEl ? positionEl.value.trim() : '',
       phone: phoneEl.value.trim(),
     };
+    // 자기등록 응답자의 이메일은 토큰 파생 키이므로 변경 대상에서 제외한다.
+    if (this.participant?.source !== 'self') {
+      payload.email = emailEl.value.trim();
+    }
 
     if (!payload.name) {
       this.participantFormError = '이름을 입력해 주십시오.';
       this.render();
       return;
     }
-    if (!payload.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+    if (!payload.org) {
+      this.participantFormError = '소속을 입력해 주십시오.';
+      this.render();
+      return;
+    }
+    if ('email' in payload && (!payload.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email))) {
       this.participantFormError = '올바른 이메일을 입력해 주십시오.';
       this.render();
       return;
@@ -385,7 +608,7 @@ export class SurveyEngine {
 
         <div class="intro-card">
           <h2>연구 소개</h2>
-          <p>건축공간연구원(AURI)은 「건축물의 복합용도 활성화 지원 특별법」의 위임 세부기준을 마련하고 있습니다. 본 조사는 <strong>용도전환 설계기준</strong>(비주거→주거 전환의 11개 분야)과 <strong>적응형 설계기준</strong>(가변성·전환성·확장성 3대 영역·등급)의 항목·경계값·가중치를 전문가 합의로 확정하기 위한 제1차 조사입니다.</p>
+          <p>건축공간연구원(AURI)은 「건축물의 복합용도 활성화 지원 특별법」의 위임 세부기준을 마련하고 있습니다. 본 조사는 <strong>용도전환 설계기준</strong>(비주거→주거 전환의 14개 분야)과 <strong>적응형 설계기준</strong>(가변성·전환성·확장성 3대 영역·등급)의 항목·경계값·가중치를 전문가 합의로 확정하기 위한 제1차 조사입니다.</p>
         </div>
 
         <div class="intro-card">

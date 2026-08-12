@@ -82,9 +82,10 @@ async function loadDashboard() {
   const cats = data.by_category;
 
   document.getElementById('stat-cards').innerHTML = `
-    <div class="stat-card"><div class="label">전체 대상자</div><div class="value">${data.total_participants}</div></div>
+    <div class="stat-card"><div class="label">등록 인원</div><div class="value">${data.total_participants}</div></div>
     <div class="stat-card"><div class="label">응답 완료</div><div class="value">${data.total_responses}</div></div>
-    <div class="stat-card"><div class="label">응답률</div><div class="value">${data.total_participants ? (data.total_responses / data.total_participants * 100).toFixed(1) : 0}%</div></div>
+    <div class="stat-card"><div class="label">제출률</div><div class="value">${data.total_participants ? (data.total_responses / data.total_participants * 100).toFixed(1) : 0}%</div></div>
+    <div class="stat-card"><div class="label">자기등록</div><div class="value">${data.self_registered ?? 0}</div></div>
   `;
 
   const order = ['설계', '시공', '건축행정', '유지관리', '기타', '미분류'];
@@ -116,13 +117,16 @@ async function loadParticipants(page = 0) {
     : data.data;
 
   document.getElementById('p-table').innerHTML = `<table>
-    <thead><tr><th>이름</th><th>소속</th><th>직군</th><th>이메일</th><th>발송</th><th>토큰</th></tr></thead>
+    <thead><tr><th>이름</th><th>소속</th><th>직위</th><th>등록</th><th>이메일</th><th>연락처</th><th>토큰</th></tr></thead>
     <tbody>${filtered.map(p => `<tr>
       <td>${p.name}</td>
       <td>${p.org || ''}</td>
-      <td><span class="badge badge-blue">${p.category || ''}</span></td>
+      <td>${p.position || ''}</td>
+      <td>${p.source === 'self'
+        ? '<span class="badge badge-green">자기등록</span>'
+        : '<span class="badge badge-gray">사전등록</span>'}</td>
       <td style="font-size:12px">${p.email}</td>
-      <td>${p.email_sent ? '<span class="badge badge-green">완료</span>' : '<span class="badge badge-gray">미발송</span>'}</td>
+      <td style="font-size:12px">${p.phone || ''}</td>
       <td><code style="font-size:11px;cursor:pointer" onclick="navigator.clipboard.writeText('${p.token}');toast('복사됨')">${p.token}</code></td>
     </tr>`).join('')}</tbody>
   </table>`;
@@ -137,12 +141,13 @@ document.getElementById('p-category').addEventListener('change', () => loadParti
 document.getElementById('p-search').addEventListener('input', () => loadParticipants(pPage));
 
 function exportParticipantLinks() {
-  const rows = [['name', 'email', 'org', 'category', 'token', 'survey_link']];
+  const rows = [['name', 'email', 'org', 'position', 'phone', 'source', 'token', 'survey_link']];
   const cat = document.getElementById('p-category').value;
   const q = `?skip=0&limit=5000` + (cat ? `&category=${cat}` : '');
   api('/api/admin/participants' + q).then(data => {
     data.data.forEach(p => {
-      rows.push([p.name, p.email, p.org || '', p.category || '', p.token,
+      rows.push([p.name, p.email, p.org || '', p.position || '', p.phone || '',
+        p.source === 'self' ? '자기등록' : '사전등록', p.token,
         `${SURVEY_PUBLIC_URL}?token=${p.token}`]);
     });
     const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');

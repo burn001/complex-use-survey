@@ -994,9 +994,9 @@ body {
 
 .participant-form label {
   display: grid;
-  grid-template-columns: 70px 1fr;
+  grid-template-columns: 84px 1fr;
   align-items: center;
-  gap: 12px;
+  gap: 6px 12px;
   font-size: 13.5px;
 }
 
@@ -1037,10 +1037,58 @@ body {
   font-size: 13.5px;
 }
 
+/* ── 자기등록 폼 (공개 링크) ── */
+.participant-form .req {
+  color: var(--c-error);
+  font-style: normal;
+  margin-left: 2px;
+}
+
+.participant-form input[readonly] {
+  background: var(--c-surface);
+  color: var(--c-text-secondary);
+  cursor: not-allowed;
+}
+
+.field-hint {
+  grid-column: 2;
+  font-size: 12px;
+  color: var(--c-text-tertiary);
+  line-height: 1.5;
+}
+
+.register-hint {
+  font-size: 12.5px;
+  color: var(--c-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--c-surface);
+  border-radius: var(--radius-sm);
+}
+
+.participant-card-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-link-quiet {
+  color: var(--c-text-tertiary);
+}
+
+.btn-link-quiet:hover {
+  background: var(--c-surface);
+  color: var(--c-text-secondary);
+}
+
 @media (max-width: 600px) {
   .participant-info,
   .participant-form label {
-    grid-template-columns: 60px 1fr;
+    grid-template-columns: 72px 1fr;
+  }
+  .field-hint {
+    grid-column: 2;
   }
   .status-info-bar + .progress-bar-wrap {
     top: 34px;

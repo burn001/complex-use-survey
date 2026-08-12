@@ -8,10 +8,20 @@ class Participant(BaseModel):
     email: str
     name: str
     org: str = ""
+    position: str = ""
     category: str = ""
     field: str = ""
     phone: str = ""
+    source: str = "import"
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SelfRegisterRequest(BaseModel):
+    name: str
+    org: str
+    email: str
+    position: str = ""
+    phone: str = ""
 
 
 class ParticipantOut(BaseModel):
@@ -26,6 +36,7 @@ class ParticipantUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     org: Optional[str] = None
+    position: Optional[str] = None
     phone: Optional[str] = None
 
 

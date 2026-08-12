@@ -25,6 +25,7 @@ async def get_stats(x_admin_key: Optional[str] = Header(None)):
 
     total_p = await db.participants.count_documents({})
     total_r = await db.responses.count_documents({})
+    self_registered = await db.participants.count_documents({"source": "self"})
 
     pipeline = [
         {"$lookup": {
@@ -52,6 +53,7 @@ async def get_stats(x_admin_key: Optional[str] = Header(None)):
     return {
         "total_participants": total_p,
         "total_responses": total_r,
+        "self_registered": self_registered,
         "by_category": by_category,
     }
 
@@ -128,7 +130,10 @@ async def export_csv(x_admin_key: Optional[str] = Header(None)):
 
     output = io.StringIO()
     writer = csv.writer(output)
-    header = ["token", "name", "org", "category", "submitted_at", "updated_at"] + sorted_keys
+    header = [
+        "token", "name", "org", "position", "email", "phone",
+        "source", "category", "submitted_at", "updated_at",
+    ] + sorted_keys
     writer.writerow(header)
 
     for d in docs:
@@ -138,6 +143,10 @@ async def export_csv(x_admin_key: Optional[str] = Header(None)):
             d.get("token", ""),
             p.get("name", ""),
             p.get("org", ""),
+            p.get("position", ""),
+            p.get("email", ""),
+            p.get("phone", ""),
+            p.get("source", "import"),
             p.get("category", ""),
             str(d.get("submitted_at", "")),
             str(d.get("updated_at", "")),
