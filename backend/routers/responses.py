@@ -1,15 +1,60 @@
 import re
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from datetime import datetime
 from models import ResponseSubmit, ResponseRecord, ParticipantUpdate, SelfRegisterRequest
 from services.db import get_db
 from services.token_service import generate_token
+from services.email_service import send_email
 from config import get_settings
 
 router = APIRouter(prefix="/api", tags=["responses"])
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+# 응답 수 도달 시 연구책임자에게 알림 메일. milestone_states 컬렉션으로 중복 발송 차단.
+MILESTONES = [15, 20, 25, 30]
+MILESTONE_TO = "jklee@auri.re.kr"
+
+
+async def _notify_milestones():
+    db = get_db()
+    test_tokens = [
+        p["token"]
+        async for p in db.participants.find({"is_test": True}, {"token": 1})
+    ]
+    count = await db.responses.count_documents({"token": {"$nin": test_tokens}})
+    for m in MILESTONES:
+        if count < m:
+            continue
+        res = await db.milestone_states.update_one(
+            {"milestone": m},
+            {"$setOnInsert": {
+                "milestone": m,
+                "count_at_send": count,
+                "sent_at": datetime.utcnow(),
+            }},
+            upsert=True,
+        )
+        if not res.upserted_id:
+            continue  # 이미 발송된 마일스톤
+        html = (
+            "<p>복합용도 전문가 설문(complex-use-survey) 응답이 "
+            f"<strong>{m}명</strong>에 도달했습니다.</p>"
+            f"<p>현재 제출 응답: {count}명 (테스트 계정 제외)</p>"
+            "<p>관리자 대시보드: "
+            '<a href="https://burn001.github.io/complex-use-survey/admin/">'
+            "https://burn001.github.io/complex-use-survey/admin/</a></p>"
+        )
+        try:
+            send_email(
+                MILESTONE_TO,
+                f"[복합용도 설문] 응답 {m}명 도달 (현재 {count}명)",
+                html,
+            )
+        except Exception:
+            # 발송 실패 시 상태를 되돌려 다음 제출 때 재시도
+            await db.milestone_states.delete_one({"milestone": m})
 
 
 async def _participant_payload(db, participant: dict) -> dict:
@@ -159,7 +204,7 @@ async def update_participant(token: str, body: ParticipantUpdate, request: Reque
 
 
 @router.post("/responses")
-async def submit_response(body: ResponseSubmit, request: Request):
+async def submit_response(body: ResponseSubmit, request: Request, background_tasks: BackgroundTasks):
     db = get_db()
     participant = await db.participants.find_one({"token": body.token})
     if not participant:
@@ -192,6 +237,7 @@ async def submit_response(body: ResponseSubmit, request: Request):
         user_agent=ua,
     )
     await db.responses.insert_one(record.model_dump())
+    background_tasks.add_task(_notify_milestones)
     return {"status": "created", "token": body.token}
 
 
