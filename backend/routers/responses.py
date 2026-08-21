@@ -3,7 +3,7 @@ import re
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from datetime import datetime
 from models import ResponseSubmit, ResponseRecord, ParticipantUpdate, SelfRegisterRequest
-from services.db import get_db
+from services.db import get_db, RESPONSES_COLL
 from services.token_service import generate_token
 from services.email_service import send_email
 from config import get_settings
@@ -12,11 +12,11 @@ router = APIRouter(prefix="/api", tags=["responses"])
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
-# 2026.8.21. 제1차 조사 마감 — 신규 자기등록만 차단한다.
-# 이미 설문을 열어 둔 응답자의 제출(/responses)은 작성분 유실 방지를 위해 허용.
-SURVEY_CLOSED = True
+# 2026.8.21. 제1차 조사 마감 → 8.22. R2(v8-r2) 공개로 재개.
+# R2 마감 시 True로 되돌린다(프론트 survey.js의 SURVEY_CLOSED와 동시 전환).
+SURVEY_CLOSED = False
 SURVEY_CLOSED_MSG = (
-    "본 전문가 조사는 2026년 8월 21일자로 마감되었습니다. "
+    "본 전문가 조사는 마감되었습니다. "
     "참여해 주신 전문가 여러분께 깊이 감사드립니다. 문의: jklee@auri.re.kr"
 )
 
@@ -31,7 +31,7 @@ async def _notify_milestones():
         p["token"]
         async for p in db.participants.find({"is_test": True}, {"token": 1})
     ]
-    count = await db.responses.count_documents({"token": {"$nin": test_tokens}})
+    count = await db[RESPONSES_COLL].count_documents({"token": {"$nin": test_tokens}})
     for m in MILESTONES:
         if count < m:
             continue
@@ -67,7 +67,7 @@ async def _notify_milestones():
 
 async def _participant_payload(db, participant: dict) -> dict:
     token = participant["token"]
-    existing = await db.responses.find_one({"token": token}, {"_id": 0})
+    existing = await db[RESPONSES_COLL].find_one({"token": token}, {"_id": 0})
     return {
         "token": token,
         "name": participant.get("name", ""),
@@ -224,9 +224,9 @@ async def submit_response(body: ResponseSubmit, request: Request, background_tas
     ip = request.client.host if request.client else ""
     ua = request.headers.get("user-agent", "")
 
-    existing = await db.responses.find_one({"token": body.token})
+    existing = await db[RESPONSES_COLL].find_one({"token": body.token})
     if existing:
-        await db.responses.update_one(
+        await db[RESPONSES_COLL].update_one(
             {"token": body.token},
             {"$set": {
                 "responses": body.responses,
@@ -246,7 +246,7 @@ async def submit_response(body: ResponseSubmit, request: Request, background_tas
         ip=ip,
         user_agent=ua,
     )
-    await db.responses.insert_one(record.model_dump())
+    await db[RESPONSES_COLL].insert_one(record.model_dump())
     background_tasks.add_task(_notify_milestones)
     return {"status": "created", "token": body.token}
 
@@ -254,7 +254,7 @@ async def submit_response(body: ResponseSubmit, request: Request, background_tas
 @router.get("/responses/{token}")
 async def get_response(token: str):
     db = get_db()
-    doc = await db.responses.find_one({"token": token}, {"_id": 0})
+    doc = await db[RESPONSES_COLL].find_one({"token": token}, {"_id": 0})
     if not doc:
         return {"token": token, "responses": None}
     return doc

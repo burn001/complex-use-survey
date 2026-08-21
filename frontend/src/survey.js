@@ -5,9 +5,9 @@ const STORAGE_PAGE_KEY = 'auri_survey_page';
 const STORAGE_TOKEN_KEY = 'auri_survey_token';
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
-// 2026.8.21. 제1차 조사 마감 — 발송 30명 전원 제출(회수율 100%).
-// 모든 진입 화면을 마감 안내로 대체한다. 재개 시 false로 되돌리고 재배포.
-const SURVEY_CLOSED = true;
+// 2026.8.21. 제1차 조사 마감(30/30 회수) → 8.22. R2(v8-r2) 공개.
+// R2 마감 시 true로 되돌리고 재배포(백엔드 responses.py의 SURVEY_CLOSED도 동시 전환).
+const SURVEY_CLOSED = false;
 
 const GATE = {
   LOADING: 'loading',
@@ -119,8 +119,8 @@ export class SurveyEngine {
 
         <div class="intro-card">
           <h2>응답자 정보</h2>
-          <p>본 조사는 건축공간연구원이 수행 중인 <strong>「건축물의 용도 전환 및 복합 활용을 위한 설계 기준 연구」</strong>의 일환으로, <strong>기축 건축물의 용도전환 기준</strong>과 <strong>신축 건축물의 적응형 설계기준</strong>을 마련하기 위한 제1차 전문가 조사입니다. 응답 전 아래 정보를 입력해 주십시오.</p>
-          <p style="margin-top:10px">입력하신 정보는 <strong>응답 확인·수정 및 2라운드 안내</strong>에만 사용되며, 분석 결과는 통계 처리되어 익명으로만 공표됩니다.</p>
+          <p>본 조사는 건축공간연구원이 수행 중인 <strong>「건축물의 용도 전환 및 복합 활용을 위한 설계 기준 연구」</strong>의 <strong>제2차 전문가 조사(재평정)</strong>입니다. 1차에서 합의에 이르지 못한 항목만 축약하여 여쭙습니다(약 10~15분).</p>
+          <p style="margin-top:10px"><strong>1차 응답 시 사용하신 이메일로 등록해 주십시오.</strong> 동일한 이메일이어야 1차 응답과 연계되어 분석됩니다. 입력하신 정보는 응답 확인·결과 안내에만 사용되며, 분석 결과는 통계 처리되어 익명으로만 공표됩니다.</p>
         </div>
 
         <div class="participant-card editing">
@@ -677,21 +677,22 @@ export class SurveyEngine {
 
         <div class="intro-card">
           <h2>연구 소개</h2>
-          <p>건축공간연구원(AURI)은 건축물의 용도 전환과 복합 활용에 대응하는 설계기준을 연구하고 있습니다. 본 조사는 다음 두 기준의 항목·경계값·가중치에 관한 전문가 의견을 수렴하기 위한 제1차 조사입니다.</p>
+          <p>1차 조사에 참여해 주신 30분 전원께서 응답을 완료해 주셨습니다(회수율 100%). 깊이 감사드립니다. 1차에서 다수 항목이 합의 기준을 충족하여 확정되었으며(재질문하지 않습니다), 본 <strong>2차 조사는 합의에 이르지 못한 항목만 축약하여 재평정</strong>을 요청드리는 것입니다.</p>
           <ul style="margin-top:10px">
-            <li><strong>용도전환 설계기준</strong> — <strong>기축(기존) 건축물</strong>을 대상으로, 이미 지어진 비주거 건축물을 주거로 바꿀 때 무엇을 완화하고 무엇을 지킬지 정하는 기준입니다(비주거→주거 전환의 14개 분야).</li>
-            <li><strong>적응형 설계기준</strong> — <strong>신축 건축물</strong>을 대상으로, 앞으로 지을 건축물이 나중에 쉽게 용도를 바꿀 수 있도록 설계 단계에서 갖출 성능을 정하는 기준입니다(가변성·전환성·확장성 3대 영역·등급).</li>
+            <li>각 문항에 <strong>1차 전체 응답 통계</strong>(분포·최빈·중앙값)를 제시합니다.</li>
+            <li><strong>다수 의견에 동조하실 의무는 없습니다.</strong> 본인의 판단을 유지하시는 경우 서술란에 근거를 남겨 주시면 최종 정리에 반영됩니다.</li>
+            <li>일부 문항은 1차 서술형 의견을 반영해 선택지를 보완했습니다(문항 설명에 표시).</li>
           </ul>
-          <p style="margin-top:10px">즉 <strong>이미 지어진 건축물의 전환</strong>(PART A)과 <strong>앞으로 지을 건축물의 전환 대비</strong>(PART B)를 함께 다룹니다.</p>
         </div>
 
         <div class="intro-card">
-          <h2>설문 구성</h2>
+          <h2>설문 구성 (재평정 24항목 + 신설 1항목)</h2>
           <ul style="margin-top:4px">
-            <li>PART 0: 응답자 정보</li>
-            <li>PART A: 용도전환 설계기준 (기축 건축물) — 14개 분야의 타당성·적용 방향</li>
-            <li>PART B: 적응형 설계기준 (신축 건축물) — AHP 가중치·지표 경계값·등급</li>
-            <li>PART C: 종합 의견</li>
+            <li>PART 1: 분야 포함 타당성 재평정 (7)</li>
+            <li>PART 2: 적용 방향 재평정 (8)</li>
+            <li>PART 3: 쟁점·경계값 재평정 (7)</li>
+            <li>PART 4: 적응형 설계기준 재평정 (2)</li>
+            <li>PART 5: 기준 적용 구조 — 신설 (1)</li>
           </ul>
           <dl class="intro-meta">
             <dt>소요 시간</dt><dd>${m.duration}</dd>

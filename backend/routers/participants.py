@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
-from services.db import get_db
+from services.db import get_db, RESPONSES_COLL
 from services.email_service import render_email, send_email
 from config import get_settings
 import logging
@@ -50,14 +50,14 @@ async def get_stats(x_admin_key: Optional[str] = Header(None)):
     r_filter = {"token": {"$nin": test_tokens}} if test_tokens else {}
 
     total_p = await db.participants.count_documents(p_filter)
-    total_r = await db.responses.count_documents(r_filter)
+    total_r = await db[RESPONSES_COLL].count_documents(r_filter)
     self_registered = await db.participants.count_documents({**p_filter, "source": "self"})
     excluded_test = len(test_tokens)
 
     pipeline = [
         {"$match": p_filter},
         {"$lookup": {
-            "from": "responses",
+            "from": RESPONSES_COLL,
             "localField": "token",
             "foreignField": "token",
             "as": "resp",
@@ -125,7 +125,7 @@ async def list_responses(
             "category": "$participant.category",
         }},
     ]
-    cursor = db.responses.aggregate(pipeline)
+    cursor = db[RESPONSES_COLL].aggregate(pipeline)
     results = [doc async for doc in cursor]
     return {"count": len(results), "data": results}
 
@@ -148,7 +148,7 @@ async def export_csv(x_admin_key: Optional[str] = Header(None)):
         {"$match": {"p.is_test": {"$ne": True}}},
         {"$sort": {"submitted_at": 1}},
     ]
-    cursor = db.responses.aggregate(pipeline)
+    cursor = db[RESPONSES_COLL].aggregate(pipeline)
     docs = [doc async for doc in cursor]
 
     if not docs:
