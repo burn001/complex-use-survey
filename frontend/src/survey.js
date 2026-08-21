@@ -5,6 +5,10 @@ const STORAGE_PAGE_KEY = 'auri_survey_page';
 const STORAGE_TOKEN_KEY = 'auri_survey_token';
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
+// 2026.8.21. 제1차 조사 마감 — 발송 30명 전원 제출(회수율 100%).
+// 모든 진입 화면을 마감 안내로 대체한다. 재개 시 false로 되돌리고 재배포.
+const SURVEY_CLOSED = true;
+
 const GATE = {
   LOADING: 'loading',
   REGISTER: 'register',
@@ -289,6 +293,10 @@ export class SurveyEngine {
 
   // ── Render Router ──
   render() {
+    if (SURVEY_CLOSED) {
+      this.renderClosed();
+      return;
+    }
     if (this.gate === GATE.LOADING) {
       this.renderLoading();
       return;
@@ -325,6 +333,44 @@ export class SurveyEngine {
           <div class="spinner"></div>
           <style>@keyframes spin{to{transform:rotate(360deg)}}.spinner{width:40px;height:40px;border:3px solid #e0e0e0;border-top:3px solid #2c2c2c;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 24px}</style>
           <p style="color:var(--c-text-secondary)">설문 링크를 확인 중입니다…</p>
+        </div>
+      </div>
+    `;
+  }
+
+  // ── Survey Closed (2026.8.21. 제1차 조사 마감) ──
+  renderClosed() {
+    const m = SURVEY_META;
+    this.container.innerHTML = `
+      <div class="survey-container">
+        <div class="survey-header">
+          <div class="institution">${m.institution}</div>
+          <h1>${m.title}</h1>
+          <div class="subtitle">${m.subtitle}</div>
+        </div>
+        <div class="access-denied">
+          <div class="access-denied-icon" style="color:#2e7d32">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.6">
+              <circle cx="12" cy="12" r="9"></circle>
+              <polyline points="7.5 12.5 10.5 15.5 16.5 8.5"></polyline>
+            </svg>
+          </div>
+          <h1>제1차 조사가 마감되었습니다</h1>
+          <p class="access-denied-msg">
+            본 전문가 조사는 2026년 8월 21일자로 마감되었습니다.<br/>
+            참여해 주신 전문가 여러분께 깊이 감사드립니다.
+          </p>
+          <p class="access-denied-msg">
+            보내주신 의견은 통계 분석을 거쳐 제2차 조사(합의 확인) 문항에 반영되며,<br/>
+            제2차 조사는 참여해 주신 분들께 이메일로 개별 안내드릴 예정입니다.
+          </p>
+          <div class="access-denied-meta">
+            <dl>
+              <dt>조사기관</dt><dd>${m.institution}</dd>
+              <dt>연구책임</dt><dd>${m.researcher}</dd>
+              <dt>문의</dt><dd>${m.contact}</dd>
+            </dl>
+          </div>
         </div>
       </div>
     `;
