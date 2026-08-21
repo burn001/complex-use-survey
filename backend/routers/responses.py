@@ -12,6 +12,14 @@ router = APIRouter(prefix="/api", tags=["responses"])
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
+# 2026.8.21. 제1차 조사 마감 — 신규 자기등록만 차단한다.
+# 이미 설문을 열어 둔 응답자의 제출(/responses)은 작성분 유실 방지를 위해 허용.
+SURVEY_CLOSED = True
+SURVEY_CLOSED_MSG = (
+    "본 전문가 조사는 2026년 8월 21일자로 마감되었습니다. "
+    "참여해 주신 전문가 여러분께 깊이 감사드립니다. 문의: jklee@auri.re.kr"
+)
+
 # 응답 수 도달 시 연구책임자에게 알림 메일. milestone_states 컬렉션으로 중복 발송 차단.
 MILESTONES = [15, 20, 25, 30]
 MILESTONE_TO = "jklee@auri.re.kr"
@@ -80,6 +88,8 @@ async def _participant_payload(db, participant: dict) -> dict:
 @router.post("/register")
 async def self_register(body: SelfRegisterRequest):
     """공개 링크 응답자의 자기등록. 같은 이메일이면 기존 참가자·응답을 이어받는다."""
+    if SURVEY_CLOSED:
+        raise HTTPException(410, SURVEY_CLOSED_MSG)
     name = body.name.strip()
     org = body.org.strip()
     email = body.email.strip().lower()
