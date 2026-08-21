@@ -6,8 +6,11 @@ const STORAGE_TOKEN_KEY = 'auri_survey_token';
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 // 2026.8.21. 제1차 조사 마감(30/30 회수) → 8.22. R2(v8-r2) 공개.
-// R2 마감 시 true로 되돌리고 재배포(백엔드 responses.py의 SURVEY_CLOSED도 동시 전환).
-const SURVEY_CLOSED = false;
+// R2는 1차 응답자 대상 — 기본 URL은 "1차 마감" 안내를 표시하고,
+// 안내 메일에만 넣는 ?r2 파라미터가 있어야 2차 설문에 진입한다.
+// (서버도 /api/register에서 1차 응답 이력이 없는 이메일을 거부 — 이중 안전장치)
+// R2 마감 시 true로 고정하고 재배포(백엔드 responses.py의 SURVEY_CLOSED도 동시 전환).
+const SURVEY_CLOSED = !new URLSearchParams(window.location.search).has('r2');
 
 const GATE = {
   LOADING: 'loading',
@@ -120,7 +123,7 @@ export class SurveyEngine {
         <div class="intro-card">
           <h2>응답자 정보</h2>
           <p>본 조사는 건축공간연구원이 수행 중인 <strong>「건축물의 용도 전환 및 복합 활용을 위한 설계 기준 연구」</strong>의 <strong>제2차 전문가 조사(재평정)</strong>입니다. 1차에서 합의에 이르지 못한 항목만 축약하여 여쭙습니다(약 10~15분).</p>
-          <p style="margin-top:10px"><strong>1차 응답 시 사용하신 이메일로 등록해 주십시오.</strong> 동일한 이메일이어야 1차 응답과 연계되어 분석됩니다. 입력하신 정보는 응답 확인·결과 안내에만 사용되며, 분석 결과는 통계 처리되어 익명으로만 공표됩니다.</p>
+          <p style="margin-top:10px">※ 본 2차 조사는 <strong>1차 조사 응답자를 대상</strong>으로 합니다. <strong>1차 응답 시 사용하신 이메일로 등록해 주십시오</strong> — 동일한 이메일이어야 1차 응답과 연계되며, 1차 응답 이력이 없는 이메일은 등록되지 않습니다. 입력하신 정보는 응답 확인·결과 안내에만 사용되며, 분석 결과는 통계 처리되어 익명으로만 공표됩니다.</p>
         </div>
 
         <div class="participant-card editing">
@@ -361,8 +364,8 @@ export class SurveyEngine {
             참여해 주신 전문가 여러분께 깊이 감사드립니다.
           </p>
           <p class="access-denied-msg">
-            보내주신 의견은 통계 분석을 거쳐 제2차 조사(합의 확인) 문항에 반영되며,<br/>
-            제2차 조사는 참여해 주신 분들께 이메일로 개별 안내드릴 예정입니다.
+            현재 <strong>1차 응답자를 대상으로 제2차 조사(재평정)</strong>가 진행 중입니다.<br/>
+            2차 조사는 개별 안내 이메일에 포함된 전용 링크로만 참여하실 수 있습니다.
           </p>
           <div class="access-denied-meta">
             <dl>

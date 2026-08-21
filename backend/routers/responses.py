@@ -105,6 +105,21 @@ async def self_register(body: SelfRegisterRequest):
 
     db = get_db()
     token = generate_token(email, get_settings().TOKEN_SECRET)
+
+    # R2(재평정)는 1차 응답자 대상 — 1차 응답 이력(responses, R1 원자료)이 없는
+    # 이메일은 등록을 거부한다. 연구진 테스트 계정(is_test)은 예외.
+    r1_exists = await db["responses"].find_one({"token": token}, {"_id": 1})
+    if not r1_exists:
+        p = await db.participants.find_one({"token": token}, {"is_test": 1})
+        if not (p and p.get("is_test")):
+            raise HTTPException(
+                403,
+                "제1차 조사는 목표 응답 수 도달로 마감되었으며, "
+                "본 2차 조사는 1차 조사 응답자를 대상으로 진행됩니다. "
+                "1차에 응답하신 경우 당시 사용하신 이메일로 등록해 주시고, "
+                "문의는 jklee@auri.re.kr 로 부탁드립니다.",
+            )
+
     now = datetime.utcnow()
 
     fields = {
